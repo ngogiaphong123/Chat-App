@@ -3,7 +3,7 @@ const http = require("http");
 const path = require("path");
 const socketio = require("socket.io");
 const formatMessage = require("./utils/messages");
-const {userJoin,getCurrentUser} = require('./utils/users')
+const {userJoin,getCurrentUser,userLeave,getRoomUsers} = require('./utils/users')
 const app = express();
 const server = http.createServer(app);
 const io = socketio(server);
@@ -22,6 +22,11 @@ io.on("connection", (socket) => {
             "message",
             formatMessage(botName, `${user.username} has joined the chat`)
         );
+        //? Send users and room info to client
+        io.to(user.room).emit("roomUsers", {
+            room: user.room,
+            users: getRoomUsers(user.room),
+        });
     });
     //? Listen for chat messages
     socket.on("chatMessage", (message) => {
@@ -30,8 +35,15 @@ io.on("connection", (socket) => {
     });
     //? Run when client disconnect
     socket.on("disconnect", () => {
-        //? io.emit() sends a message to all connected clients
-        io.emit("message", formatMessage(botName, "A user has left the chat"));
+        const user = userLeave(socket.id);
+        if(user) {
+            //? io.emit() sends a message to all connected clients
+            io.to(user.room).emit("message", formatMessage(user.username, `${user.username} has left the chat`));
+            io.to(user.room).emit("roomUsers", {
+                room: user.room,
+                users: getRoomUsers(user.room),
+            });
+        }
     });
 });
 const PORT = process.env.PORT || 3000;
